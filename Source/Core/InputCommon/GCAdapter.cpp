@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "InputCommon/GCAdapter.h"
+#include <sys/shm.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 
 #ifndef ANDROID
 #define GCADAPTER_USE_LIBUSB_IMPLEMENTATION true
@@ -160,6 +163,8 @@ static std::optional<size_t> s_config_callback_id = std::nullopt;
 
 static bool s_is_adapter_wanted = false;
 static std::array<bool, SerialInterface::MAX_SI_CHANNELS> s_config_rumble_enabled{};
+
+static void* ptr;
 
 static void ReadThreadFunc()
 {
@@ -408,6 +413,12 @@ static void RefreshConfig()
 
 void Init()
 {
+
+  int shm_fd = shm_open("gcadapter", O_CREAT | O_RDWR, 0666);
+  int ec = ftruncate(shm_fd, 36);
+  ptr = mmap(0, 36, PROT_WRITE, MAP_SHARED, shm_fd, 0);
+  close(shm_fd);
+
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION
   if (s_handle != nullptr)
     return;
@@ -794,6 +805,8 @@ void ProcessInputPayload(const u8* data, std::size_t size)
 
       if (type != ControllerType::None)
       {
+
+        memcpy((char*)ptr+(chan*9), channel_data, 9);
         const u8 b1 = channel_data[1];
         const u8 b2 = channel_data[2];
 
