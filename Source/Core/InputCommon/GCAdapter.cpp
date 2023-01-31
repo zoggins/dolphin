@@ -5,6 +5,7 @@
 #include <sys/shm.h>
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #ifndef ANDROID
 #define GCADAPTER_USE_LIBUSB_IMPLEMENTATION true
@@ -165,6 +166,7 @@ static bool s_is_adapter_wanted = false;
 static std::array<bool, SerialInterface::MAX_SI_CHANNELS> s_config_rumble_enabled{};
 
 static void* ptr;
+static int fd;
 
 static void ReadThreadFunc()
 {
@@ -418,6 +420,10 @@ void Init()
   int ec = ftruncate(shm_fd, 36);
   ptr = mmap(0, 36, PROT_WRITE, MAP_SHARED, shm_fd, 0);
   close(shm_fd);
+#elif __APPLE__
+  char buffer[36] = {0};
+  fd = open("/tmp/gcadapter", O_CREAT | O_RDWR | O_NONBLOCK, 0666);
+  int rc = write(fd, buffer, 36);
 #endif
 
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION
@@ -794,6 +800,10 @@ void ProcessInputPayload(const u8* data, std::size_t size)
   {
     std::lock_guard lk(s_read_mutex);
 
+#ifdef __APPLE__
+    lseek(fd, 0, SEEK_SET);
+#endif
+
     for (int chan = 0; chan != SerialInterface::MAX_SI_CHANNELS; ++chan)
     {
       const u8* const channel_data = &data[1 + (9 * chan)];
@@ -808,6 +818,8 @@ void ProcessInputPayload(const u8* data, std::size_t size)
       {
 #ifdef __linux__
         memcpy((char*)ptr+(chan*9), channel_data, 9);
+#elif __APPLE__
+        write(fd, channel_data, 9);
 #endif
         const u8 b1 = channel_data[1];
         const u8 b2 = channel_data[2];
