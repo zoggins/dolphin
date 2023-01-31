@@ -413,11 +413,12 @@ static void RefreshConfig()
 
 void Init()
 {
-
+#ifdef __linux__
   int shm_fd = shm_open("gcadapter", O_CREAT | O_RDWR, 0666);
   int ec = ftruncate(shm_fd, 36);
   ptr = mmap(0, 36, PROT_WRITE, MAP_SHARED, shm_fd, 0);
   close(shm_fd);
+#endif
 
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION
   if (s_handle != nullptr)
@@ -805,8 +806,9 @@ void ProcessInputPayload(const u8* data, std::size_t size)
 
       if (type != ControllerType::None)
       {
-
+#ifdef __linux__
         memcpy((char*)ptr+(chan*9), channel_data, 9);
+#endif
         const u8 b1 = channel_data[1];
         const u8 b2 = channel_data[2];
 
